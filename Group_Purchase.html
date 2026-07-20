@@ -57,7 +57,7 @@
 </head>
 <body>
 <h1>Vendor Purchase Dashboard</h1>
-<div class="sub">Group Purchases &middot; Jan 2025 &ndash; Jul 2026 &middot; source: Total Direct Cost &amp; QtyReceived</div>
+<div class="sub">Group Purchases &middot; Jan 2025 &ndash; Jul 2026 &middot; source: Total Direct Cost &amp; QtyReceived &middot; <span id="periodLabel" style="color:var(--accent)"></span></div>
 
 <div class="controls">
   <div>
@@ -85,6 +85,30 @@
       <option value="cost">Purchase $ (Total Direct Cost)</option>
       <option value="qty">Quantity Received</option>
       <option value="avg">Avg Cost ($/unit)</option>
+    </select>
+  </div>
+  <div>
+    <label>Year</label>
+    <div class="seg" id="yearSeg"></div>
+  </div>
+  <div>
+    <label>Quarter</label>
+    <div class="seg" id="qSeg">
+      <button type="button" data-q="all" class="on">All</button>
+      <button type="button" data-q="Q1">Q1</button>
+      <button type="button" data-q="Q2">Q2</button>
+      <button type="button" data-q="Q3">Q3</button>
+      <button type="button" data-q="Q4">Q4</button>
+    </div>
+  </div>
+  <div>
+    <label>Month</label>
+    <select id="monthSel">
+      <option value="all">All</option>
+      <option value="01">Jan</option><option value="02">Feb</option><option value="03">Mar</option>
+      <option value="04">Apr</option><option value="05">May</option><option value="06">Jun</option>
+      <option value="07">Jul</option><option value="08">Aug</option><option value="09">Sep</option>
+      <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
     </select>
   </div>
 </div>
@@ -186,14 +210,43 @@ btn.addEventListener('click',e=>{e.stopPropagation();menu.hidden=!menu.hidden;})
 document.addEventListener('click',e=>{if(!menu.hidden&&!menu.contains(e.target)&&e.target!==btn)menu.hidden=true;});
 updateBtnLabel();
 
+// time-period filters
+let periodYear='all', periodQ='all', periodMonth='all';
+const years=[...new Set(months.map(m=>m.slice(0,4)))].sort();
+const yearSeg=document.getElementById('yearSeg');
+yearSeg.innerHTML='<button type="button" data-y="all" class="on">All</button>'+
+  years.map(y=>`<button type="button" data-y="${y}">${y}</button>`).join('');
+function segPick(seg,val,attr){seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset[attr]===val));}
+yearSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{periodYear=b.dataset.y;segPick(yearSeg,periodYear,'y');render();}));
+const qSeg=document.getElementById('qSeg');
+qSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{periodQ=b.dataset.q;segPick(qSeg,periodQ,'q');render();}));
+document.getElementById('monthSel').addEventListener('change',e=>{periodMonth=e.target.value;render();});
+
+function activeMonths(){
+  return months.filter(ym=>{
+    const[yy,mm]=ym.split('-');
+    if(periodYear!=='all'&&yy!==periodYear)return false;
+    if(periodQ!=='all'&&('Q'+Math.ceil(+mm/3))!==periodQ)return false;
+    if(periodMonth!=='all'&&mm!==periodMonth)return false;
+    return true;
+  });
+}
+function periodText(){
+  const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const parts=[periodYear==='all'?'All years':periodYear,
+               periodQ==='all'?null:periodQ,
+               periodMonth==='all'?null:mn[+periodMonth-1]].filter(Boolean);
+  return 'Showing: '+parts.join(' · ');
+}
+
 function filtered(){return selected.size?DATA.filter(d=>selected.has(d.vendor)):[];}
 
 function seriesBy(){
-  const rows=filtered();
+  const rows=filtered(), mf=activeMonths();
   const byM={};
-  months.forEach(m=>byM[m]={cost:0,qty:0});
-  rows.forEach(d=>{byM[d.ym].cost+=d.cost;byM[d.ym].qty+=d.qty;});
-  return months.map(m=>({ym:m,cost:byM[m].cost,qty:byM[m].qty,avg:byM[m].qty?byM[m].cost/byM[m].qty:null}));
+  mf.forEach(m=>byM[m]={cost:0,qty:0});
+  rows.forEach(d=>{if(byM[d.ym]){byM[d.ym].cost+=d.cost;byM[d.ym].qty+=d.qty;}});
+  return mf.map(m=>({ym:m,cost:byM[m].cost,qty:byM[m].qty,avg:byM[m].qty?byM[m].cost/byM[m].qty:null}));
 }
 
 let charts={};
@@ -203,6 +256,7 @@ const gridB={grid:{display:false},ticks:{color:'#94a3b8'}};
 function render(){
   const s=seriesBy();
   const metric=document.getElementById('metricSel').value;
+  document.getElementById('periodLabel').textContent=periodText();
 
   // KPIs
   const tc=s.reduce((a,b)=>a+b.cost,0);
@@ -306,8 +360,9 @@ function render(){
         y1:{position:'right',grid:{display:false},ticks:{color:'#34d399',callback:v=>fmtN(v)}}}}
   });
 
-  // Ranking (always all vendors, by cost)
-  const vt={};DATA.forEach(d=>{vt[d.vendor]=(vt[d.vendor]||0)+d.cost;});
+  // Ranking (all vendors, by cost, within the active period)
+  const mfSet=new Set(activeMonths());
+  const vt={};DATA.forEach(d=>{if(mfSet.has(d.ym))vt[d.vendor]=(vt[d.vendor]||0)+d.cost;});
   const ranked=Object.entries(vt).sort((a,b)=>b[1]-a[1]);
   charts.rank&&charts.rank.destroy();
   charts.rank=new Chart(document.getElementById('rankChart'),{
