@@ -242,7 +242,7 @@ function render(){
     if(pct==null||!isFinite(pct))return '';
     const up=pct>=0; const bad=higherIsBad?up:!up;
     return `<span style="color:${bad?'var(--red)':'var(--green)'}">${up?'▲':'▼'} ${Math.abs(pct).toFixed(1)}% YoY</span>`
-      +`<span style="color:var(--muted)"> (${yoy.win} ${yoy.cur} vs ${yoy.prev})</span>`;
+      +`<span style="color:var(--muted)"> YTD (${yoy.win} ${yoy.cur} vs ${yoy.win} ${yoy.prev})</span>`;
   };
   document.getElementById('kpis').innerHTML=[
     ['Total Purchases',fmt$(tc),'', yoy?badge(yoy.cost,false):''],
