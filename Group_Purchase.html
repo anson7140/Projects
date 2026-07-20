@@ -274,15 +274,22 @@ function render(){
     }
   }
 
-  // YoY over comparable window (same calendar months present in both years)
-  const yrs=[...new Set(s.filter(x=>x.qty>0).map(x=>x.ym.slice(0,4)))].sort();
-  const curY=yrs[yrs.length-1], prevY=yrs.length>1?yrs[yrs.length-2]:null;
+  // full vendor/region-filtered monthly map (ignores the YEAR filter) for YoY lookups
+  const fullByM={};
+  filtered().forEach(d=>{(fullByM[d.ym]=fullByM[d.ym]||[0,0]);fullByM[d.ym][0]+=d.cost;fullByM[d.ym][1]+=d.qty;});
+  const mAvg=ym=>{const r=fullByM[ym];return r&&r[1]>0?r[0]/r[1]:null;};
+
+  // YoY: compare the active calendar months of the latest in-view year vs the same months a year earlier
+  const amonths=activeMonths();
+  const curY=amonths.length?String(Math.max(...amonths.map(x=>+x.slice(0,4)))):null;
+  const prevY=curY?String(+curY-1):null;
+  const calMonths=[...new Set(amonths.map(x=>x.slice(5)))].sort();
   let yoy=null;
-  if(prevY){
+  if(curY&&prevY){
     let cC=0,cP=0,qC=0,qP=0; const ov=[];
-    ['01','02','03','04','05','06','07','08','09','10','11','12'].forEach(m=>{
-      const a=s.find(x=>x.ym===curY+'-'+m), b=s.find(x=>x.ym===prevY+'-'+m);
-      if(a&&b&&a.qty>0&&b.qty>0){cC+=a.cost;cP+=b.cost;qC+=a.qty;qP+=b.qty;ov.push(+m-1);}
+    calMonths.forEach(m=>{
+      const a=fullByM[curY+'-'+m], b=fullByM[prevY+'-'+m];
+      if(a&&b&&a[1]>0&&b[1]>0){cC+=a[0];cP+=b[0];qC+=a[1];qP+=b[1];ov.push(+m-1);}
     });
     if(ov.length){
       const nm=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -340,8 +347,7 @@ function render(){
   // Avg cost + qty combo, with prior-year (YoY) dotted line
   const avgPrior=s.map(x=>{
     const[y,m]=x.ym.split('-');
-    const r=s.find(z=>z.ym===(+y-1)+'-'+m);
-    return (r&&r.qty>0)?r.avg:null;
+    return mAvg((+y-1)+'-'+m);
   });
   charts.avg&&charts.avg.destroy();
   charts.avg=new Chart(document.getElementById('avgChart'),{
