@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Vendor Purchase Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#243449; --line:#334155;
+    --txt:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --accent2:#f59e0b;
+    --green:#34d399; --red:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--txt);padding:24px;}
+  h1{font-size:22px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+  .controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:22px;
+            background:var(--panel);padding:16px;border-radius:12px;border:1px solid var(--line)}
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
+  select,input{background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+               border-radius:8px;padding:9px 12px;font-size:14px;min-width:220px}
+  .msbtn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;
+         padding:9px 12px;font-size:14px;min-width:260px;text-align:left;cursor:pointer}
+  .msmenu{position:absolute;z-index:20;top:100%;left:0;margin-top:6px;width:300px;max-height:340px;overflow:auto;
+          background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px;
+          box-shadow:0 12px 30px rgba(0,0,0,.45)}
+  .msactions{display:flex;gap:8px;padding:4px 4px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+  .msactions button{flex:1;background:var(--panel);color:var(--accent);border:1px solid var(--line);
+                    border-radius:6px;padding:6px;font-size:12px;cursor:pointer;min-width:0}
+  .msrow{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:6px;font-size:13px;cursor:pointer}
+  .msrow:hover{background:var(--panel)}
+  .msrow input{min-width:0;width:16px;height:16px;accent-color:var(--accent);padding:0}
+  .tag{font-size:10px;padding:1px 6px;border-radius:4px;margin-left:auto;letter-spacing:.04em}
+  .tag.dom{background:rgba(52,211,153,.18);color:#34d399}
+  .tag.ovs{background:rgba(56,189,248,.18);color:#38bdf8}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:var(--panel2);color:var(--muted);border:0;border-right:1px solid var(--line);
+              padding:9px 14px;font-size:13px;cursor:pointer;min-width:0}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--accent);color:#04121c;font-weight:600}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .kpi .v{font-size:24px;font-weight:700}
+  .kpi .l{font-size:12px;color:var(--muted);margin-top:4px}
+  .kpi .v.small{font-size:20px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card.full{grid-column:1/-1}
+  .card h3{margin:0 0 4px;font-size:15px}
+  .card .hint{color:var(--muted);font-size:12px;margin-bottom:12px}
+  .chartwrap{position:relative;height:320px}
+  .foot{color:var(--muted);font-size:11px;margin-top:22px;line-height:1.6}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>Vendor Purchase Dashboard</h1>
+<div class="sub">Group Purchases &middot; Jan 2025 &ndash; Jul 2026 &middot; source: Total Direct Cost &amp; QtyReceived</div>
+
+<div class="controls">
+  <div>
+    <label>Region</label>
+    <div class="seg" id="regionSeg">
+      <button type="button" data-region="all" class="on">All</button>
+      <button type="button" data-region="dom">Domestic</button>
+      <button type="button" data-region="ovs">Overseas</button>
+    </div>
+  </div>
+  <div style="position:relative">
+    <label>Vendors</label>
+    <button type="button" id="vendorBtn" class="msbtn">All vendors <span style="float:right;color:var(--muted)">&#9662;</span></button>
+    <div id="vendorMenu" class="msmenu" hidden>
+      <div class="msactions">
+        <button type="button" id="msAll">Select all</button>
+        <button type="button" id="msNone">Clear</button>
+      </div>
+      <div id="msList"></div>
+    </div>
+  </div>
+  <div>
+    <label>Metric focus</label>
+    <select id="metricSel">
+      <option value="cost">Purchase $ (Total Direct Cost)</option>
+      <option value="qty">Quantity Received</option>
+      <option value="avg">Avg Cost ($/unit)</option>
+    </select>
+  </div>
+</div>
+
+<div class="kpis" id="kpis"></div>
+
+<div class="grid">
+  <div class="card full">
+    <h3 id="trendTitle">Monthly Purchases ($)</h3>
+    <div class="hint">Full monthly time series for the selected vendor.</div>
+    <div class="chartwrap"><canvas id="trendChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Year-over-Year by Month</h3>
+    <div class="hint">2025 vs 2026, same calendar month (overlap: Jan&ndash;Jul).</div>
+    <div class="chartwrap"><canvas id="yoyChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Avg Cost per Unit Trend</h3>
+    <div class="hint">Total Direct Cost &divide; QtyReceived, by month. Bars show quantity; dotted line is the same month a year earlier (YoY).</div>
+    <div class="chartwrap"><canvas id="avgChart"></canvas></div>
+  </div>
+
+  <div class="card full">
+    <h3>Vendor Ranking (selected range)</h3>
+    <div class="hint">Total purchase $ by vendor across the full period. Selected vendors highlighted in amber.</div>
+    <div class="chartwrap" style="height:420px"><canvas id="rankChart"></canvas></div>
+  </div>
+</div>
+
+<div class="foot" id="foot"></div>
+
+<script>
+const DATA = [{"ym":"2025-01","vendor":"ANTRC INDUSTRIAL CORP.","cost":136108.09,"qty":2561.0},{"ym":"2025-05","vendor":"ANTRC INDUSTRIAL CORP.","cost":180619.24,"qty":3906.0},{"ym":"2025-06","vendor":"ANTRC INDUSTRIAL CORP.","cost":65562.96,"qty":1098.0},{"ym":"2025-07","vendor":"ANTRC INDUSTRIAL CORP.","cost":74026.03,"qty":1251.0},{"ym":"2025-09","vendor":"ANTRC INDUSTRIAL CORP.","cost":125333.51,"qty":2528.0},{"ym":"2025-10","vendor":"ANTRC INDUSTRIAL CORP.","cost":136861.33,"qty":2870.0},{"ym":"2025-12","vendor":"ANTRC INDUSTRIAL CORP.","cost":67070.38,"qty":1726.0},{"ym":"2025-01","vendor":"AUTO PARTS INDUSTRIAL, LTD","cost":67424.86,"qty":2117.0},{"ym":"2025-05","vendor":"AUTO PARTS INDUSTRIAL, LTD","cost":91580.94,"qty":3785.0},{"ym":"2025-06","vendor":"AUTO PARTS INDUSTRIAL, LTD","cost":22655.74,"qty":789.0},{"ym":"2025-07","vendor":"AUTO PARTS INDUSTRIAL, LTD","cost":154278.44,"qty":4277.0},{"ym":"2025-09","vendor":"AUTO PARTS INDUSTRIAL, LTD","cost":21344.4,"qty":599.0},{"ym":"2025-10","vendor":"AUTO PARTS INDUSTRIAL, LTD","cost":51608.1,"qty":1501.0},{"ym":"2025-12","vendor":"AUTO PARTS INDUSTRIAL, LTD","cost":21568.84,"qty":721.0},{"ym":"2026-01","vendor":"AUTO PARTS INDUSTRIAL, LTD","cost":26283.95,"qty":897.0},{"ym":"2026-03","vendor":"AUTO PARTS INDUSTRIAL, LTD","cost":19433.11,"qty":726.0},{"ym":"2025-06","vendor":"CAP","cost":123.75,"qty":10.0},{"ym":"2025-01","vendor":"COBRA KING INDUSTRY CO, LTD","cost":38196.91,"qty":1186.0},{"ym":"2025-05","vendor":"COBRA KING INDUSTRY CO, LTD","cost":114700.93,"qty":4914.0},{"ym":"2025-07","vendor":"COBRA KING INDUSTRY CO, LTD","cost":186694.46,"qty":8153.0},{"ym":"2025-09","vendor":"COBRA KING INDUSTRY CO, LTD","cost":138019.85,"qty":5951.0},{"ym":"2025-10","vendor":"COBRA KING INDUSTRY CO, LTD","cost":125606.16,"qty":5473.0},{"ym":"2026-02","vendor":"CSF","cost":3996.48,"qty":55.0},{"ym":"2025-05","vendor":"DA JUANE INDUSTRIAL CO. LTD.","cost":28210.0,"qty":730.0},{"ym":"2025-01","vendor":"FORTRESS","cost":83028.39,"qty":1189.0},{"ym":"2025-03","vendor":"FORTRESS","cost":66152.34,"qty":1067.0},{"ym":"2025-04","vendor":"FORTRESS","cost":109711.88,"qty":715.0},{"ym":"2025-05","vendor":"FORTRESS","cost":174702.98,"qty":7149.0},{"ym":"2025-07","vendor":"FORTRESS","cost":164354.61,"qty":4504.0},{"ym":"2025-08","vendor":"FORTRESS","cost":87020.03,"qty":2201.0},{"ym":"2025-09","vendor":"FORTRESS","cost":86044.36,"qty":3024.0},{"ym":"2025-01","vendor":"GENERA CORPORATION","cost":3729.89,"qty":20.0},{"ym":"2025-02","vendor":"GENERA CORPORATION","cost":21231.87,"qty":239.0},{"ym":"2025-04","vendor":"GENERA CORPORATION","cost":284579.66,"qty":3454.0},{"ym":"2025-05","vendor":"GENERA CORPORATION","cost":72996.81,"qty":908.0},{"ym":"2025-06","vendor":"GENERA CORPORATION","cost":166717.96,"qty":2108.0},{"ym":"2025-07","vendor":"GENERA CORPORATION","cost":33655.02,"qty":296.0},{"ym":"2025-08","vendor":"GENERA CORPORATION","cost":218671.62,"qty":2033.0},{"ym":"2025-09","vendor":"GENERA CORPORATION","cost":71118.87,"qty":723.0},{"ym":"2025-10","vendor":"GENERA CORPORATION","cost":73521.45,"qty":591.0},{"ym":"2025-11","vendor":"GENERA CORPORATION","cost":59470.13,"qty":710.0},{"ym":"2025-12","vendor":"GENERA CORPORATION","cost":29355.19,"qty":380.0},{"ym":"2026-01","vendor":"GENERA CORPORATION","cost":35532.28,"qty":380.0},{"ym":"2026-02","vendor":"GENERA CORPORATION","cost":36056.46,"qty":354.0},{"ym":"2026-03","vendor":"GENERA CORPORATION","cost":29867.86,"qty":259.0},{"ym":"2026-04","vendor":"GENERA CORPORATION","cost":37272.16,"qty":455.0},{"ym":"2026-05","vendor":"GENERA CORPORATION","cost":30969.29,"qty":328.0},{"ym":"2026-06","vendor":"GENERA CORPORATION","cost":78094.86,"qty":758.0},{"ym":"2026-07","vendor":"GENERA CORPORATION","cost":33046.5,"qty":299.0},{"ym":"2025-05","vendor":"GLOBAL NET AUTOMOTIVE CO., LTD","cost":193092.54,"qty":7634.0},{"ym":"2025-08","vendor":"GLOBAL NET AUTOMOTIVE CO., LTD","cost":65485.91,"qty":2222.0},{"ym":"2025-01","vendor":"GORDON AUTO BODY PARTS","cost":33087.52,"qty":794.0},{"ym":"2025-09","vendor":"GORDON AUTO BODY PARTS","cost":38746.38,"qty":763.0},{"ym":"2025-05","vendor":"GORDON AUTO BODY PARTS CO., LTD.","cost":37546.11,"qty":854.0},{"ym":"2025-09","vendor":"GORDON AUTO BODY PARTS CO., LTD.","cost":40365.16,"qty":842.0},{"ym":"2025-05","vendor":"JINSHIUAN TRADING LTD.","cost":42631.2,"qty":3695.0},{"ym":"2025-06","vendor":"JINSHIUAN TRADING LTD.","cost":49561.39,"qty":2971.0},{"ym":"2025-09","vendor":"JINSHIUAN TRADING LTD.","cost":58366.13,"qty":5538.0},{"ym":"2025-03","vendor":"KSI","cost":294915.01,"qty":10893.0},{"ym":"2025-04","vendor":"KSI","cost":178076.87,"qty":5709.0},{"ym":"2025-05","vendor":"KSI","cost":155863.35,"qty":3873.0},{"ym":"2025-06","vendor":"KSI","cost":434764.58,"qty":11747.0},{"ym":"2025-08","vendor":"KSI","cost":359781.72,"qty":11247.0},{"ym":"2025-04","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":63494.81,"qty":1320.0},{"ym":"2025-05","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":98031.47,"qty":2551.0},{"ym":"2025-06","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":224081.77,"qty":7466.0},{"ym":"2025-09","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":612202.64,"qty":17511.0},{"ym":"2025-10","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":577559.59,"qty":20112.0},{"ym":"2025-11","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":275169.0,"qty":12556.0},{"ym":"2025-12","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":414839.1,"qty":19826.0},{"ym":"2026-01","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":419477.25,"qty":17804.0},{"ym":"2026-02","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":625055.92,"qty":24787.0},{"ym":"2026-03","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":351440.38,"qty":13047.0},{"ym":"2026-04","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":374591.22,"qty":16238.0},{"ym":"2026-05","vendor":"KSI TRADING CORP_TAIWAN BRANCH","cost":139509.1,"qty":6107.0},{"ym":"2025-01","vendor":"MANZAI","cost":40139.78,"qty":853.0},{"ym":"2025-05","vendor":"MANZAI","cost":38182.0,"qty":972.0},{"ym":"2025-01","vendor":"MAXZONE VEHICLE LIGHTING","cost":24551.81,"qty":470.0},{"ym":"2025-02","vendor":"MAXZONE VEHICLE LIGHTING","cost":6561.61,"qty":94.0},{"ym":"2025-03","vendor":"MAXZONE VEHICLE LIGHTING","cost":98464.99,"qty":1107.0},{"ym":"2025-04","vendor":"MAXZONE VEHICLE LIGHTING","cost":289040.48,"qty":3487.0},{"ym":"2025-05","vendor":"MAXZONE VEHICLE LIGHTING","cost":241940.29,"qty":3119.0},{"ym":"2025-06","vendor":"MAXZONE VEHICLE LIGHTING","cost":161974.0,"qty":1647.0},{"ym":"2025-07","vendor":"MAXZONE VEHICLE LIGHTING","cost":478288.7,"qty":5369.0},{"ym":"2025-08","vendor":"MAXZONE VEHICLE LIGHTING","cost":152256.53,"qty":1995.0},{"ym":"2025-09","vendor":"MAXZONE VEHICLE LIGHTING","cost":134361.38,"qty":1544.0},{"ym":"2025-10","vendor":"MAXZONE VEHICLE LIGHTING","cost":75824.77,"qty":765.0},{"ym":"2025-11","vendor":"MAXZONE VEHICLE LIGHTING","cost":215535.47,"qty":3168.0},{"ym":"2025-12","vendor":"MAXZONE VEHICLE LIGHTING","cost":125719.32,"qty":1965.0},{"ym":"2026-01","vendor":"MAXZONE VEHICLE LIGHTING","cost":71072.51,"qty":1050.0},{"ym":"2026-02","vendor":"MAXZONE VEHICLE LIGHTING","cost":66888.67,"qty":902.0},{"ym":"2026-03","vendor":"MAXZONE VEHICLE LIGHTING","cost":104020.36,"qty":1521.0},{"ym":"2026-04","vendor":"MAXZONE VEHICLE LIGHTING","cost":88833.88,"qty":1418.0},{"ym":"2026-05","vendor":"MAXZONE VEHICLE LIGHTING","cost":218691.52,"qty":3155.0},{"ym":"2026-06","vendor":"MAXZONE VEHICLE LIGHTING","cost":91239.09,"qty":1308.0},{"ym":"2026-07","vendor":"MAXZONE VEHICLE LIGHTING","cost":78617.26,"qty":1050.0},{"ym":"2025-05","vendor":"PACIFIC BEST, INC.","cost":8301.65,"qty":83.0},{"ym":"2025-06","vendor":"PACIFIC BEST, INC.","cost":6570.55,"qty":81.0},{"ym":"2025-08","vendor":"PACIFIC BEST, INC.","cost":9937.25,"qty":135.0},{"ym":"2025-10","vendor":"PACIFIC BEST, INC.","cost":7378.25,"qty":95.0},{"ym":"2025-12","vendor":"PACIFIC BEST, INC.","cost":4526.55,"qty":61.0},{"ym":"2026-01","vendor":"PACIFIC BEST, INC.","cost":7316.15,"qty":93.0},{"ym":"2026-05","vendor":"PACIFIC BEST, INC.","cost":5689.6,"qty":72.0},{"ym":"2026-07","vendor":"PACIFIC BEST, INC.","cost":6029.25,"qty":75.0},{"ym":"2025-01","vendor":"PERFORMANCE RADIATOR","cost":801.1,"qty":12.0},{"ym":"2025-02","vendor":"PERFORMANCE RADIATOR","cost":1125.63,"qty":14.0},{"ym":"2025-04","vendor":"REACH INTERNATIONAL","cost":17247.82,"qty":378.0},{"ym":"2025-06","vendor":"REACH INTERNATIONAL","cost":6482.28,"qty":103.0},{"ym":"2026-03","vendor":"ROBERT BOSCH","cost":2013.0,"qty":80.0},{"ym":"2026-04","vendor":"ROBERT BOSCH","cost":739.95,"qty":25.0},{"ym":"2025-02","vendor":"SHANGHAI REGO","cost":62873.41,"qty":937.0},{"ym":"2025-10","vendor":"SHANGHAI REGO","cost":47407.0,"qty":639.0},{"ym":"2025-11","vendor":"SHANGHAI REGO","cost":53633.6,"qty":884.0},{"ym":"2026-03","vendor":"SHANGHAI REGO","cost":44405.5,"qty":1398.0},{"ym":"2025-02","vendor":"SINOLINK PREMIUM PARTS","cost":44730.0,"qty":223.0},{"ym":"2025-01","vendor":"TONG YANG INDUSTRIES","cost":219011.45,"qty":5086.0},{"ym":"2025-04","vendor":"TONG YANG INDUSTRIES","cost":311614.79,"qty":6644.0},{"ym":"2025-05","vendor":"TONG YANG INDUSTRIES","cost":354558.45,"qty":7353.0},{"ym":"2025-06","vendor":"TONG YANG INDUSTRIES","cost":334850.83,"qty":6361.0},{"ym":"2025-07","vendor":"TONG YANG INDUSTRIES","cost":625082.02,"qty":11966.0},{"ym":"2025-08","vendor":"TONG YANG INDUSTRIES","cost":306498.73,"qty":4961.0},{"ym":"2025-09","vendor":"TONG YANG INDUSTRIES","cost":579458.01,"qty":10879.0},{"ym":"2025-10","vendor":"TONG YANG INDUSTRIES","cost":647238.51,"qty":13546.0},{"ym":"2025-11","vendor":"TONG YANG INDUSTRIES","cost":308215.82,"qty":6973.0},{"ym":"2025-12","vendor":"TONG YANG INDUSTRIES","cost":206039.62,"qty":4321.0},{"ym":"2026-01","vendor":"TONG YANG INDUSTRIES","cost":377386.1,"qty":7991.0},{"ym":"2026-02","vendor":"TONG YANG INDUSTRIES","cost":209733.54,"qty":4963.0},{"ym":"2026-03","vendor":"TONG YANG INDUSTRIES","cost":310849.55,"qty":7180.0},{"ym":"2026-04","vendor":"TONG YANG INDUSTRIES","cost":177282.44,"qty":4114.0},{"ym":"2026-05","vendor":"TONG YANG INDUSTRIES","cost":61254.59,"qty":1454.0},{"ym":"2025-01","vendor":"TYGP","cost":94.05,"qty":2.0},{"ym":"2025-03","vendor":"TYGP","cost":14654.97,"qty":255.0},{"ym":"2025-04","vendor":"TYGP","cost":86443.48,"qty":1713.0},{"ym":"2025-05","vendor":"TYGP","cost":25290.2,"qty":458.0},{"ym":"2025-06","vendor":"TYGP","cost":13649.11,"qty":198.0},{"ym":"2025-07","vendor":"TYGP","cost":8681.55,"qty":107.0},{"ym":"2025-08","vendor":"TYGP","cost":31706.34,"qty":493.0},{"ym":"2025-09","vendor":"TYGP","cost":20894.21,"qty":316.0},{"ym":"2025-11","vendor":"TYGP","cost":19061.08,"qty":312.0},{"ym":"2026-01","vendor":"TYGP","cost":5072.52,"qty":94.0},{"ym":"2026-02","vendor":"TYGP","cost":6432.15,"qty":107.0},{"ym":"2026-05","vendor":"TYGP","cost":6229.24,"qty":95.0},{"ym":"2026-06","vendor":"TYGP","cost":4622.29,"qty":79.0},{"ym":"2025-04","vendor":"YCC PARTS MFG. CO., LTD.","cost":37180.4,"qty":1105.0},{"ym":"2025-05","vendor":"YCC PARTS MFG. CO., LTD.","cost":36130.3,"qty":1075.0},{"ym":"2025-07","vendor":"YCC PARTS MFG. CO., LTD.","cost":37275.25,"qty":975.0},{"ym":"2025-08","vendor":"YCC PARTS MFG. CO., LTD.","cost":24795.84,"qty":537.0},{"ym":"2025-10","vendor":"YCC PARTS MFG. CO., LTD.","cost":90397.43,"qty":2533.0},{"ym":"2026-02","vendor":"YCC PARTS MFG. CO., LTD.","cost":19617.8,"qty":587.0},{"ym":"2026-03","vendor":"YCC PARTS MFG. CO., LTD.","cost":17079.65,"qty":511.0},{"ym":"2026-05","vendor":"YCC PARTS MFG. CO., LTD.","cost":20104.48,"qty":573.0}];
+const fmt$=n=>'$'+Math.round(n).toLocaleString();
+const fmt$2=n=>'$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtN=n=>Math.round(n).toLocaleString();
+
+// all months sorted
+const months=[...new Set(DATA.map(d=>d.ym))].sort();
+const vendors=[...new Set(DATA.map(d=>d.vendor))].sort();
+const monLabel=ym=>{const[y,m]=ym.split('-');return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]+' '+y.slice(2);};
+
+// region classification (matched to exact vendor names in the data)
+const DOMESTIC=new Set(vendors.filter(v=>
+  ['TYGP','REACH','MAXZONE','GENERA','CSF','PACIFIC BEST','ROBERT BOSCH']
+    .some(k=>v.toUpperCase().startsWith(k))));
+const isDom=v=>DOMESTIC.has(v);
+
+// multi-select vendor slicer
+const selected=new Set(vendors);   // start with all selected
+const btn=document.getElementById('vendorBtn');
+const menu=document.getElementById('vendorMenu');
+const list=document.getElementById('msList');
+list.innerHTML=vendors.map((v,i)=>
+  `<label class="msrow"><input type="checkbox" data-i="${i}" checked/> <span>${v}</span>`+
+  `<span class="tag ${isDom(v)?'dom':'ovs'}">${isDom(v)?'DOM':'OVS'}</span></label>`).join('');
+
+const regionSeg=document.getElementById('regionSeg');
+function updateRegionUI(){
+  const dom=vendors.filter(isDom), ovs=vendors.filter(v=>!isDom(v));
+  const eq=arr=>arr.length===selected.size&&arr.every(v=>selected.has(v));
+  let active = selected.size===vendors.length?'all' : eq(dom)?'dom' : eq(ovs)?'ovs' : '';
+  regionSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.region===active));
+}
+regionSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+  const r=b.dataset.region;
+  const grp = r==='dom'?vendors.filter(isDom) : r==='ovs'?vendors.filter(v=>!isDom(v)) : vendors;
+  selected.clear(); grp.forEach(v=>selected.add(v));
+  list.querySelectorAll('input').forEach(cb=>cb.checked=selected.has(vendors[+cb.dataset.i]));
+  updateBtnLabel(); updateRegionUI(); render();
+}));
+
+function updateBtnLabel(){
+  let t;
+  if(selected.size===0) t='No vendors selected';
+  else if(selected.size===vendors.length) t='All vendors';
+  else if(selected.size===1) t=[...selected][0];
+  else t=selected.size+' vendors selected';
+  btn.innerHTML=`${t} <span style="float:right;color:var(--muted)">&#9662;</span>`;
+}
+list.querySelectorAll('input').forEach(cb=>{
+  cb.addEventListener('change',()=>{
+    const v=vendors[+cb.dataset.i];
+    cb.checked?selected.add(v):selected.delete(v);
+    updateBtnLabel(); updateRegionUI(); render();
+  });
+});
+function setAll(on){
+  selected.clear(); if(on) vendors.forEach(v=>selected.add(v));
+  list.querySelectorAll('input').forEach(cb=>cb.checked=on);
+  updateBtnLabel(); updateRegionUI(); render();
+}
+document.getElementById('msAll').addEventListener('click',()=>setAll(true));
+document.getElementById('msNone').addEventListener('click',()=>setAll(false));
+btn.addEventListener('click',e=>{e.stopPropagation();menu.hidden=!menu.hidden;});
+document.addEventListener('click',e=>{if(!menu.hidden&&!menu.contains(e.target)&&e.target!==btn)menu.hidden=true;});
+updateBtnLabel();
+
+function filtered(){return selected.size?DATA.filter(d=>selected.has(d.vendor)):[];}
+
+function seriesBy(){
+  const rows=filtered();
+  const byM={};
+  months.forEach(m=>byM[m]={cost:0,qty:0});
+  rows.forEach(d=>{byM[d.ym].cost+=d.cost;byM[d.ym].qty+=d.qty;});
+  return months.map(m=>({ym:m,cost:byM[m].cost,qty:byM[m].qty,avg:byM[m].qty?byM[m].cost/byM[m].qty:null}));
+}
+
+let charts={};
+const grid={grid:{color:'rgba(148,163,184,.12)'},ticks:{color:'#94a3b8'}};
+const gridB={grid:{display:false},ticks:{color:'#94a3b8'}};
+
+function render(){
+  const s=seriesBy();
+  const metric=document.getElementById('metricSel').value;
+
+  // KPIs
+  const tc=s.reduce((a,b)=>a+b.cost,0);
+  const tq=s.reduce((a,b)=>a+b.qty,0);
+  const avg=tq?tc/tq:0;
+  const active=s.filter(x=>x.cost>0).length;
+  // Latest avg cost MoM comparison
+  const nz=s.filter(x=>x.qty>0);
+  const last=nz[nz.length-1], prev=nz[nz.length-2];
+  let avgVal='—', avgDelta='';
+  if(last){
+    avgVal=fmt$2(last.avg);
+    if(prev){
+      const p=((last.avg-prev.avg)/prev.avg*100);
+      const up=p>=0;
+      avgDelta=`<span style="color:${up?'var(--red)':'var(--green)'}">${up?'▲':'▼'} ${Math.abs(p).toFixed(1)}% MoM vs ${monLabel(prev.ym)}</span>`;
+    }
+  }
+
+  // YoY over comparable window (same calendar months present in both years)
+  const yrs=[...new Set(s.filter(x=>x.qty>0).map(x=>x.ym.slice(0,4)))].sort();
+  const curY=yrs[yrs.length-1], prevY=yrs.length>1?yrs[yrs.length-2]:null;
+  let yoy=null;
+  if(prevY){
+    let cC=0,cP=0,qC=0,qP=0; const ov=[];
+    ['01','02','03','04','05','06','07','08','09','10','11','12'].forEach(m=>{
+      const a=s.find(x=>x.ym===curY+'-'+m), b=s.find(x=>x.ym===prevY+'-'+m);
+      if(a&&b&&a.qty>0&&b.qty>0){cC+=a.cost;cP+=b.cost;qC+=a.qty;qP+=b.qty;ov.push(+m-1);}
+    });
+    if(ov.length){
+      const nm=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      yoy={cost:(cC-cP)/cP*100,qty:(qC-qP)/qP*100,avg:((cC/qC)-(cP/qP))/(cP/qP)*100,
+           win:nm[ov[0]]+'–'+nm[ov[ov.length-1]],cur:curY,prev:prevY};
+    }
+  }
+  const badge=(pct,higherIsBad)=>{
+    if(pct==null||!isFinite(pct))return '';
+    const up=pct>=0; const bad=higherIsBad?up:!up;
+    return `<span style="color:${bad?'var(--red)':'var(--green)'}">${up?'▲':'▼'} ${Math.abs(pct).toFixed(1)}% YoY</span>`
+      +`<span style="color:var(--muted)"> (${yoy.win} ${yoy.cur} vs ${yoy.prev})</span>`;
+  };
+  document.getElementById('kpis').innerHTML=[
+    ['Total Purchases',fmt$(tc),'', yoy?badge(yoy.cost,false):''],
+    ['Total Qty Received',fmtN(tq),'', yoy?badge(yoy.qty,false):''],
+    ['Blended Avg Cost',fmt$2(avg),'small', yoy?badge(yoy.avg,true):''],
+    ['Active Months',active+' / '+s.length],
+    [last?`Avg Cost — ${monLabel(last.ym)}`:'Avg Cost',avgVal,'small',avgDelta]
+  ].map(k=>`<div class="kpi"><div class="v ${k[2]||''}">${k[1]}</div><div class="l">${k[0]}</div>${k[3]?`<div class="l" style="margin-top:6px">${k[3]}</div>`:''}</div>`).join('');
+
+  // Trend chart (metric-driven)
+  const labels=s.map(x=>monLabel(x.ym));
+  let arr,ttl,color,yfmt;
+  if(metric==='cost'){arr=s.map(x=>x.cost);ttl='Monthly Purchases ($)';color='#38bdf8';yfmt=fmt$;}
+  else if(metric==='qty'){arr=s.map(x=>x.qty);ttl='Monthly Quantity Received';color='#34d399';yfmt=fmtN;}
+  else{arr=s.map(x=>x.avg);ttl='Monthly Avg Cost per Unit ($)';color='#f59e0b';yfmt=fmt$2;}
+  document.getElementById('trendTitle').textContent=ttl;
+  charts.trend&&charts.trend.destroy();
+  charts.trend=new Chart(document.getElementById('trendChart'),{
+    type:'line',
+    data:{labels,datasets:[{label:ttl,data:arr,borderColor:color,backgroundColor:color+'22',
+      fill:true,tension:.3,spanGaps:true,pointRadius:3,borderWidth:2}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>' '+(metric==='qty'?fmtN(c.parsed.y):metric==='avg'?fmt$2(c.parsed.y):fmt$(c.parsed.y))}}},
+      scales:{x:gridB,y:{...grid,ticks:{color:'#94a3b8',callback:v=>metric==='qty'?fmtN(v):metric==='avg'?'$'+v:fmt$(v)}}}}
+  });
+
+  // YoY chart
+  const monthsShort=['01','02','03','04','05','06','07','08','09','10','11','12'];
+  const names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const y25=monthsShort.map(m=>{const r=s.find(x=>x.ym==='2025-'+m);return r?r[metric==='avg'?'avg':metric]:0;});
+  const y26=monthsShort.map(m=>{const r=s.find(x=>x.ym==='2026-'+m);return r?r[metric==='avg'?'avg':metric]:0;});
+  charts.yoy&&charts.yoy.destroy();
+  charts.yoy=new Chart(document.getElementById('yoyChart'),{
+    type:'bar',
+    data:{labels:names,datasets:[
+      {label:'2025',data:y25,backgroundColor:'#64748b'},
+      {label:'2026',data:y26,backgroundColor:'#38bdf8'}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e2e8f0'}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+(metric==='qty'?fmtN(c.parsed.y):metric==='avg'?fmt$2(c.parsed.y):fmt$(c.parsed.y))}}},
+      scales:{x:gridB,y:{...grid,ticks:{color:'#94a3b8',callback:v=>metric==='qty'?fmtN(v):metric==='avg'?'$'+v:fmt$(v)}}}}
+  });
+
+  // Avg cost + qty combo, with prior-year (YoY) dotted line
+  const avgPrior=s.map(x=>{
+    const[y,m]=x.ym.split('-');
+    const r=s.find(z=>z.ym===(+y-1)+'-'+m);
+    return (r&&r.qty>0)?r.avg:null;
+  });
+  charts.avg&&charts.avg.destroy();
+  charts.avg=new Chart(document.getElementById('avgChart'),{
+    data:{labels,datasets:[
+      {type:'bar',label:'Qty Received',data:s.map(x=>x.qty),backgroundColor:'rgba(52,211,153,.35)',yAxisID:'y1',order:3},
+      {type:'line',label:'Avg Cost $/unit',data:s.map(x=>x.avg),borderColor:'#f59e0b',backgroundColor:'#f59e0b',
+       tension:.3,spanGaps:true,yAxisID:'y',pointRadius:3,borderWidth:2,order:1},
+      {type:'line',label:'Avg Cost — prior yr (YoY)',data:avgPrior,borderColor:'#fcd34d',backgroundColor:'transparent',
+       borderDash:[5,4],tension:.3,spanGaps:false,yAxisID:'y',pointRadius:2,borderWidth:2,order:2}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e2e8f0'}},
+      tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?fmtN(c.parsed.y)+' units':c.dataset.label+': '+fmt$2(c.parsed.y)}}},
+      scales:{x:gridB,
+        y:{position:'left',...grid,ticks:{color:'#f59e0b',callback:v=>'$'+v}},
+        y1:{position:'right',grid:{display:false},ticks:{color:'#34d399',callback:v=>fmtN(v)}}}}
+  });
+
+  // Ranking (always all vendors, by cost)
+  const vt={};DATA.forEach(d=>{vt[d.vendor]=(vt[d.vendor]||0)+d.cost;});
+  const ranked=Object.entries(vt).sort((a,b)=>b[1]-a[1]);
+  charts.rank&&charts.rank.destroy();
+  charts.rank=new Chart(document.getElementById('rankChart'),{
+    type:'bar',
+    data:{labels:ranked.map(r=>r[0]),datasets:[{label:'Total $',data:ranked.map(r=>r[1]),
+      backgroundColor:ranked.map(r=>selected.has(r[0])?'#f59e0b':'#334155')}]},
+    options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>fmt$(c.parsed.x)}}},
+      scales:{x:{...grid,ticks:{color:'#94a3b8',callback:v=>'$'+(v/1e6).toFixed(1)+'M'}},
+              y:{...gridB,ticks:{color:'#cbd5e1',font:{size:11}}}}}
+  });
+}
+
+document.getElementById('metricSel').addEventListener('change',render);
+render();
+
+document.getElementById('foot').innerHTML=
+ 'Avg cost per unit = Total Direct Cost &divide; QtyReceived. '+
+ 'Blended avg = period total cost &divide; total qty (not a simple average of monthly rates). '+
+ 'YoY overlap is Jan&ndash;Jul (2025 data starts Jan; 2026 data ends Jul). '+
+ 'Note: "GORDON AUTO BODY PARTS" and "GORDON AUTO BODY PARTS CO., LTD." appear as separate vendors in the source and are not merged here.';
+</script>
+</body>
+</html>
