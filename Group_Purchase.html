@@ -136,8 +136,8 @@
 
   <div class="card full">
     <h3>Vendor Ranking (selected range)</h3>
-    <div class="hint">Total purchase $ by vendor across the full period. Selected vendors highlighted in amber.</div>
-    <div class="chartwrap" style="height:420px"><canvas id="rankChart"></canvas></div>
+    <div class="hint">Total purchase $ by vendor code across the selected period. Selected vendors highlighted in amber. Scroll sideways to see all codes.</div>
+    <div class="chartwrap" id="rankWrap" style="height:460px;overflow-x:auto"><div id="rankInner" style="height:100%"><canvas id="rankChart"></canvas></div></div>
   </div>
 </div>
 
@@ -368,17 +368,17 @@ function render(){
   const mfSet=new Set(activeMonths());
   const vt={};DATA.forEach(d=>{if(mfSet.has(d.ym))vt[d.vendor]=(vt[d.vendor]||0)+d.cost;});
   const ranked=Object.entries(vt).sort((a,b)=>b[1]-a[1]).filter(r=>r[1]>0);
-  // size the chart so every vendor code has a visible row/label
-  document.getElementById('rankChart').parentElement.style.height=Math.max(360,ranked.length*24+40)+'px';
+  // vertical bars: widen inner canvas so every code fits on the X axis (scrolls sideways)
+  document.getElementById('rankInner').style.width=Math.max(document.getElementById('rankWrap').clientWidth,ranked.length*34)+'px';
   charts.rank&&charts.rank.destroy();
   charts.rank=new Chart(document.getElementById('rankChart'),{
     type:'bar',
     data:{labels:ranked.map(r=>r[0]),datasets:[{label:'Total $',data:ranked.map(r=>r[1]),
       backgroundColor:ranked.map(r=>selected.has(r[0])?'#f59e0b':'#334155')}]},
-    options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},
-      tooltip:{callbacks:{label:c=>fmt$(c.parsed.x)}}},
-      scales:{x:{...grid,ticks:{color:'#94a3b8',callback:v=>'$'+(v/1e6).toFixed(1)+'M'}},
-              y:{...gridB,ticks:{color:'#cbd5e1',font:{size:11},autoSkip:false}}}}
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>fmt$(c.parsed.y)}}},
+      scales:{x:{...gridB,ticks:{color:'#cbd5e1',font:{size:10},autoSkip:false,maxRotation:90,minRotation:90}},
+              y:{...grid,ticks:{color:'#94a3b8',callback:v=>'$'+(v/1e6).toFixed(1)+'M'}}}}
   });
 }
 
