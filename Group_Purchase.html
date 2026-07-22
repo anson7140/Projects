@@ -208,33 +208,43 @@ btn.addEventListener('click',e=>{e.stopPropagation();menu.hidden=!menu.hidden;})
 document.addEventListener('click',e=>{if(!menu.hidden&&!menu.contains(e.target)&&e.target!==btn)menu.hidden=true;});
 updateBtnLabel();
 
-// time-period filters
-let periodYear='all', periodQ='all', periodMonth='all';
+// time-period filters — Year & Quarter are MULTI-select (empty set = All)
+let periodYears=new Set(), periodQs=new Set(), periodMonth='all';
 const years=[...new Set(months.map(m=>m.slice(0,4)))].sort();
 const yearSeg=document.getElementById('yearSeg');
 yearSeg.innerHTML='<button type="button" data-y="all" class="on">All</button>'+
   years.map(y=>`<button type="button" data-y="${y}">${y}</button>`).join('');
-function segPick(seg,val,attr){seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset[attr]===val));}
-yearSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{periodYear=b.dataset.y;segPick(yearSeg,periodYear,'y');render();}));
 const qSeg=document.getElementById('qSeg');
-qSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{periodQ=b.dataset.q;segPick(qSeg,periodQ,'q');render();}));
+function paintSeg(seg,set){
+  seg.querySelectorAll('button').forEach(b=>{
+    const v=b.dataset.y!==undefined?b.dataset.y:b.dataset.q;
+    b.classList.toggle('on', v==='all'? set.size===0 : set.has(v));
+  });
+}
+function toggleMulti(seg,set,val){
+  if(val==='all') set.clear();
+  else set.has(val)?set.delete(val):set.add(val);
+  paintSeg(seg,set); render();
+}
+yearSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>toggleMulti(yearSeg,periodYears,b.dataset.y)));
+qSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>toggleMulti(qSeg,periodQs,b.dataset.q)));
 document.getElementById('monthSel').addEventListener('change',e=>{periodMonth=e.target.value;render();});
 
 function activeMonths(){
   return months.filter(ym=>{
     const[yy,mm]=ym.split('-');
-    if(periodYear!=='all'&&yy!==periodYear)return false;
-    if(periodQ!=='all'&&('Q'+Math.ceil(+mm/3))!==periodQ)return false;
+    if(periodYears.size&&!periodYears.has(yy))return false;
+    if(periodQs.size&&!periodQs.has('Q'+Math.ceil(+mm/3)))return false;
     if(periodMonth!=='all'&&mm!==periodMonth)return false;
     return true;
   });
 }
 function periodText(){
   const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const parts=[periodYear==='all'?'All years':periodYear,
-               periodQ==='all'?null:periodQ,
-               periodMonth==='all'?null:mn[+periodMonth-1]].filter(Boolean);
-  return 'Showing: '+parts.join(' · ');
+  const y=periodYears.size?[...periodYears].sort().join(', '):'All years';
+  const q=periodQs.size?[...periodQs].sort().join('+'):null;
+  const m=periodMonth==='all'?null:mn[+periodMonth-1];
+  return 'Showing: '+[y,q,m].filter(Boolean).join(' · ');
 }
 
 function filtered(){return selected.size?DATA.filter(d=>selected.has(d.vendor)):[];}
