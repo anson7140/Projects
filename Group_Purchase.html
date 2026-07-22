@@ -130,7 +130,7 @@
 
   <div class="card">
     <h3>Avg Cost per Unit Trend</h3>
-    <div class="hint">Total Direct Cost &divide; QtyReceived, by month. Bars show quantity; dotted line is the same month a year earlier (YoY).</div>
+    <div class="hint">Total Direct Cost &divide; QtyReceived, by month. Bars show quantity; dotted line is the % change vs the same month a year earlier (right axis).</div>
     <div class="chartwrap"><canvas id="avgChart"></canvas></div>
   </div>
 
@@ -354,24 +354,27 @@ function render(){
       scales:{x:gridB,y:{...grid,ticks:{color:'#94a3b8',callback:v=>metric==='qty'?fmtN(v):metric==='avg'?'$'+v:fmt$(v)}}}}
   });
 
-  // Avg cost + qty combo, with prior-year (YoY) dotted line
-  const avgPrior=s.map(x=>{
+  // Avg cost + qty combo, with dotted YoY %-difference line (current avg vs same month last year)
+  const avgPct=s.map(x=>{
     const[y,m]=x.ym.split('-');
-    return mAvg((+y-1)+'-'+m);
+    const prior=mAvg((+y-1)+'-'+m);
+    return (prior&&x.avg!=null)?((x.avg-prior)/prior*100):null;
   });
+  const fmtPct=v=>(v>=0?'+':'')+v.toFixed(1)+'%';
   charts.avg&&charts.avg.destroy();
   charts.avg=new Chart(document.getElementById('avgChart'),{
     data:{labels,datasets:[
       {type:'bar',label:'Qty Received',data:s.map(x=>x.qty),backgroundColor:'rgba(52,211,153,.35)',yAxisID:'y1',order:3},
       {type:'line',label:'Avg Cost $/unit',data:s.map(x=>x.avg),borderColor:'#f59e0b',backgroundColor:'#f59e0b',
        tension:.3,spanGaps:true,yAxisID:'y',pointRadius:3,borderWidth:2,order:1},
-      {type:'line',label:'Avg Cost — prior yr (YoY)',data:avgPrior,borderColor:'#fcd34d',backgroundColor:'transparent',
-       borderDash:[5,4],tension:.3,spanGaps:false,yAxisID:'y',pointRadius:2,borderWidth:2,order:2}]},
+      {type:'line',label:'YoY % vs prior yr',data:avgPct,borderColor:'#fcd34d',backgroundColor:'transparent',
+       borderDash:[5,4],tension:.3,spanGaps:false,yAxisID:'y2',pointRadius:2,borderWidth:2,order:2}]},
     options:{maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e2e8f0'}},
-      tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?fmtN(c.parsed.y)+' units':c.dataset.label+': '+fmt$2(c.parsed.y)}}},
+      tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?fmtN(c.parsed.y)+' units':c.dataset.yAxisID==='y2'?'YoY '+fmtPct(c.parsed.y):'Avg Cost: '+fmt$2(c.parsed.y)}}},
       scales:{x:gridB,
         y:{position:'left',...grid,ticks:{color:'#f59e0b',callback:v=>'$'+v}},
-        y1:{position:'right',grid:{display:false},ticks:{color:'#34d399',callback:v=>fmtN(v)}}}}
+        y1:{position:'right',grid:{display:false},ticks:{color:'#34d399',callback:v=>fmtN(v)}},
+        y2:{position:'right',grid:{display:false},ticks:{color:'#fcd34d',callback:v=>(v>0?'+':'')+v+'%'}}}}
   });
 
   // Ranking (all vendors, by cost, within the active period)
